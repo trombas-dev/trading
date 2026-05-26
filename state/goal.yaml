@@ -1,7 +1,7 @@
 # Hermes portfolio goal and performance targets.
 # Active symbols are defined in strategy.yaml (all without active: false).
 # score.py evaluates pnl_pct = pnl_r * position_size_r * 100.
-# With 1% risk per trade: 1 R = 1% gain.  5% monthly target ≈ 5 R / month.
+# With 1% risk per trade: 1 R = 1% gain.  5% monthly target ~ 5 R / month.
 #
 # Portfolio OOS reference (grid optimizer, real spreads, 2024-2026):
 #   GBPAUD  +44.92R  Sharpe 1.52
@@ -10,15 +10,15 @@
 #   USDCHF  +22.43R  Sharpe 0.96
 #   XAUUSD  +19.32R  Sharpe 0.89
 #   NZDUSD  +15.30R  Sharpe 1.08
-#   ──────────────────────────────
+#   --------------------------------
 #   Total   +159.24R (paper target across all 6 pairs)
 
-# ── Performance targets (per pair, 1% risk) ────────────────────────────────────
-target_return_30d: 0.05    # 5%  monthly return (≈ 5 R at 1% risk per trade)
-max_drawdown:      0.05    # 5%  max acceptable drawdown per pair
+# ---- Performance targets (per pair, 1% risk) ----------------------------------
+target_return_30d: 0.05    # 5% monthly return (approx 5 R at 1% risk per trade)
+max_drawdown:      0.05    # 5% max acceptable drawdown per pair
 min_sharpe:        1.0     # minimum annualised Sharpe ratio
 
-# ── Reflection triggers ────────────────────────────────────────────────────────
-failure_below:     -0.04   # score floor — circuit-breaker when score < this
+# ---- Reflection triggers -------------------------------------------------------
+failure_below:     -0.04   # score floor -- circuit-breaker when score < this
 reflection_every:  10      # trigger Claude reflection every N closed trades per pair
-one_variable_only: true    # scientific-method guardrail — one change per reflect
+one_variable_only: true    # scientific-method guardrail -- one change per reflect
