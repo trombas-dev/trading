@@ -1000,7 +1000,7 @@ dependencies = [
     { name = "ccxt" },
     { name = "httpx" },
     { name = "matplotlib" },
-    { name = "metatrader5" },
+    { name = "metatrader5", marker = "sys_platform == 'win32'" },
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "pandas", version = "2.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -1018,7 +1018,7 @@ requires-dist = [
     { name = "ccxt", specifier = ">=4.0.0" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "matplotlib", specifier = ">=3.10.9" },
-    { name = "metatrader5", specifier = ">=5.0.5735" },
+    { name = "metatrader5", marker = "sys_platform == 'win32'", specifier = ">=5.0.5735" },
     { name = "numpy", specifier = ">=1.26.0" },
     { name = "pandas", specifier = ">=2.0.0" },
     { name = "pyarrow", specifier = ">=14.0.0" },
@@ -1393,7 +1393,7 @@ version = "5.0.5735"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11' and sys_platform == 'win32'" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c1/8c/bbfde8e0aa9bd08439cc60c54bab106ea485c1a5e1bc651bbe295bbe9614/metatrader5-5.0.5735-cp310-cp310-win_amd64.whl", hash = "sha256:8f576f271844069e40aefddb70197a07f3e511d71ebc048edc1fbc78695a7ba3", size = 48092, upload-time = "2026-04-04T16:44:07.236Z" },
