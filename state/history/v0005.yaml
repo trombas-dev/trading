@@ -1,0 +1,35 @@
+# v05 -- PORTFOLIO OPTIMISATION (CURRENT)
+# Per-symbol grid optimizer results (IS 2019-2022, VAL 2023, OOS 2024-2026,
+# real MT5 ICMarkets EU Demo spreads applied):
+#
+#   Symbol   n_bias  n_sig  zone_lo  zone_hi  timeout  OOS R   Sharpe
+#   GBPAUD      7      3    0.236    0.786       2     +44.92R   1.52
+#   BTCUSD      9      3    0.236    0.618       2     +31.94R   1.14  (VAL -11.89R caution)
+#   GBPUSD      5      3    0.236    0.618       6     +25.33R   1.43
+#   USDCHF      9      3    0.236    0.618       6     +22.43R   0.96
+#   XAUUSD      9      3    0.236    0.618       6     +19.32R   0.89
+#   NZDUSD      9      5    0.382    0.618       2     +15.30R   1.08  (only 16 OOS trades)
+#   Total portfolio OOS: +159.24R
+#
+# Architecture: 6 parallel MTFTradingLoop instances (asyncio.gather),
+# each writing to state/SYMBOL/. Single shared status server on $PORT.
+# Railway deployment: yfinance fallback (MT5 not available on Linux).
+scenario: 1
+use_bos_windows: false
+n_bias:   9
+n_signal: 3
+n_entry:  3
+zone_lo:  0.236
+zone_hi:  0.618
+timeout_bars: 6
+max_bars_in_trade: 100
+position_size_r: 0.01
+source: mt5
+version: '05'
+symbols:
+  GBPAUD:  {n_bias: 7, n_signal: 3, zone_lo: 0.236, zone_hi: 0.786, timeout_bars: 2}
+  BTCUSD:  {n_bias: 9, n_signal: 3, zone_lo: 0.236, zone_hi: 0.618, timeout_bars: 2}
+  GBPUSD:  {n_bias: 5, n_signal: 3, zone_lo: 0.236, zone_hi: 0.618, timeout_bars: 6}
+  USDCHF:  {n_bias: 9, n_signal: 3, zone_lo: 0.236, zone_hi: 0.618, timeout_bars: 6}
+  XAUUSD:  {n_bias: 9, n_signal: 3, zone_lo: 0.236, zone_hi: 0.618, timeout_bars: 6}
+  NZDUSD:  {n_bias: 9, n_signal: 5, zone_lo: 0.382, zone_hi: 0.618, timeout_bars: 2}

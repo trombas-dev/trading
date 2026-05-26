@@ -28,7 +28,7 @@
 #   GBPJPY   nb5 ns5 z0.24-0.62 t6         +0.73R     0.05     SUSPENDED (no edge vs MaxDD)
 #   EURJPY   nb5 ns3 z0.24-0.62 t2         +0.12R     0.01     SUSPENDED (spread destroys signal)
 
-version: '01'
+version: '05'
 
 # ── Scenario ─────────────────────────────────────────────────────────────────
 scenario: 1              # 1=1H/15M/5M  2=4H/1H/15M  3=1D/4H/1H

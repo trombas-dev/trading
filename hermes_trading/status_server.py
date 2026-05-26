@@ -136,6 +136,9 @@ def _build_status(state_dir: Path) -> dict:
         all_trades: list[dict] = []
         all_hyps:   list[dict] = []
 
+        # Portfolio-level hypotheses (root state dir) come first
+        all_hyps = _load_json_lines(state_dir / "hypotheses.jsonl")
+
         for sym, sym_dir in sym_dirs.items():
             s = _symbol_status(sym_dir)
             per_symbol[sym] = s

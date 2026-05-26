@@ -1,0 +1,20 @@
+# v04 -- SPREAD FIX
+# Critical bug: half_spread was 0.0 in all backtests. Backtests were
+# therefore overstating edge (no transaction cost applied).
+# Fix: real MT5 bid-ask spreads measured from ICMarkets EU Demo 2026-05-25.
+# Re-ran full grid optimiser (108 combos) on all 13 candidate pairs with
+# real spreads. Result: 4 pairs (EURGBP, GBPCHF, CHFJPY, USDJPY, EURUSD,
+# GBPJPY, EURJPY) either negative OOS or near-zero after spread deduction.
+# Active portfolio reduced to 6 pairs: GBPAUD, BTCUSD, GBPUSD, USDCHF,
+# XAUUSD, NZDUSD.
+scenario: 1
+n_bias:   9
+n_signal: 3
+n_entry:  3
+zone_lo:  0.236
+zone_hi:  0.618
+timeout_bars: 6
+max_bars_in_trade: 100
+position_size_r: 0.01
+source: mt5
+version: '04'

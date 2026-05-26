@@ -1,0 +1,15 @@
+# v03 -- MAJOR ARCHITECTURE CHANGE
+# Replaced RSI momentum strategy with MTF Fibonacci CHoCH pipeline.
+# 1H bias (CHoCH) -> 15M signal (CHoCH confirm) -> 5M entry (Fib zone touch).
+# Single symbol: BTCUSD, scenario 1, default params, spread=0 (bug, fixed in v04).
+scenario: 1
+n_bias:   9
+n_signal: 5
+n_entry:  3
+zone_lo:  0.382
+zone_hi:  0.786
+timeout_bars: 4
+max_bars_in_trade: 100
+position_size_r: 0.01
+source: mt5
+version: '03'
