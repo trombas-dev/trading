@@ -1,0 +1,187 @@
+# Hermes MTF Fibonacci strategy parameters
+# Claude can modify any value below between ticks; the loop reloads this file
+# on every iteration without restart.
+#
+# Parameters the reflection engine may tune:
+#   n_bias, n_signal, n_entry   -- swing lookback on each timeframe (odd 3..11)
+#   zone_lo, zone_hi            -- Fibonacci entry zone boundaries
+#   timeout_bars                -- entry-TF bars window stays open after signal
+#   max_bars_in_trade           -- entry-TF bars max trade duration before timeout
+#   position_size_r             -- fraction of account risked per trade (e.g. 0.01 = 1%)
+#
+# Scenarios
+# ---------
+#   scenario: 1   1H bias  → 15M signal → 5M  entry  (default, fastest signals)
+#   scenario: 2   4H bias  → 1H signal  → 15M entry  (medium swing)
+#   scenario: 3   1D bias  → 4H signal  → 1H  entry  (daily swing, very few trades)
+#
+# Grid optimizer results (IS 2019-2022, VAL 2023, OOS 2024-2026, real MT5 spreads):
+#   Symbol   Best params                    OOS R   OOS Sharpe  Status
+#   GBPAUD   nb7 ns3 z0.24-0.79 t2        +44.92R     1.52     ACTIVE
+#   BTCUSD   nb9 ns3 z0.24-0.62 t2        +31.94R     1.14     ACTIVE (VAL -11.89R caution)
+#   GBPUSD   nb5 ns3 z0.24-0.62 t6        +25.33R     1.43     ACTIVE
+#   USDCHF   nb9 ns3 z0.24-0.62 t6        +22.43R     0.96     ACTIVE
+#   XAUUSD   nb9 ns3 z0.24-0.62 t6        +19.32R     0.89     ACTIVE
+#   NZDUSD   nb9 ns5 z0.38-0.62 t2        +15.30R     1.08     ACTIVE (only 16 OOS trades)
+#   USDJPY   nb9 ns7 z0.24-0.62 t4         +1.24R     0.15     SUSPENDED (spread kills edge)
+#   EURUSD   nb9 ns7 z0.24-0.62 t6         +0.58R     0.07     SUSPENDED (flat after spread)
+#   GBPJPY   nb5 ns5 z0.24-0.62 t6         +0.73R     0.05     SUSPENDED (no edge vs MaxDD)
+#   EURJPY   nb5 ns3 z0.24-0.62 t2         +0.12R     0.01     SUSPENDED (spread destroys signal)
+
+version: '01'
+
+# ── Scenario ─────────────────────────────────────────────────────────────────
+scenario: 1              # 1=1H/15M/5M  2=4H/1H/15M  3=1D/4H/1H
+use_bos_windows: false   # true = also open windows on BOS (more trades, noisier)
+bos_fib_mode: last_leg   # last_leg | full_trend | delayed  (only when use_bos_windows: true)
+
+# ── Swing / structure parameters ─────────────────────────────────────────────
+n_bias:   9              # bias-TF swing lookback  (optimised from 7)
+n_signal: 3              # signal-TF swing lookback (optimised from 5)
+n_entry:  3              # entry-TF swing lookback
+
+# ── Fibonacci zone ────────────────────────────────────────────────────────────
+zone_lo: 0.236           # lower fib band boundary  (optimised: wider than default 0.382)
+zone_hi: 0.618           # upper fib band boundary  (optimised: tighter than default 0.786)
+
+# ── Trade timing ──────────────────────────────────────────────────────────────
+timeout_bars:      6     # entry-TF bars the entry window stays open (optimised from 4)
+max_bars_in_trade: 100   # entry-TF bars max before timeout exit
+
+# ── Risk ──────────────────────────────────────────────────────────────────────
+position_size_r: 0.01    # 1 % of account per trade
+
+# ── Data source + bar counts ──────────────────────────────────────────────────
+source:     mt5          # yfinance | mt5
+
+# Bar counts per timeframe (tune for scenario & memory constraints)
+n_bars_1d:  250          # 1D  bars (~1 year of trading days)
+n_bars_4h:  500          # 4H  bars (~83 days / ~3 months)
+n_bars_1h:  1000         # 1H  bars (~42 days / ~6 weeks)
+n_bars_15m: 500          # 15M bars (~5 days)
+n_bars_5m:  500          # 5M  bars (~1.7 days)
+
+# ── Regime filter ────────────────────────────────────────────────────────────
+# Skips bias windows that open when the daily market has no trend.
+# Eliminates choppy-market whipsaws (e.g. GBPJPY 2019-2021 dead zone).
+#
+# regime_filter options:
+#   none       : Disabled — all windows allowed (reproduces original results)
+#   adx        : Skip when ADX(regime_adx_period) < regime_adx_min on regime_tf
+#                Wilder's canonical: ADX < 20 = no trend, > 25 = trending
+#   atr_ratio  : Skip when ATR(10)/ATR(50) < 0.80 on regime_tf
+#                Catches low-volatility compression before breakouts
+#
+# regime_tf: which timeframe to compute the indicator on.
+#   "1D" is recommended for Scenario 1 (1H bias) — smooth, fewer false signals.
+#   Both "4H" and "1D" must be in the fetched bar dict (always true for parquet/MT5).
+regime_filter:     none   # none | adx | atr_ratio
+# NOTE: Rolling walk-forward shows ADX-20/1D is net-negative for most pairs
+# because CHoCH events already act as a structural regime filter.
+# Enable per-symbol below with tuned thresholds after calibration.
+# Example: regime_filter: adx  regime_tf: 4H  regime_adx_min: 15.0
+regime_tf:         1D     # timeframe for regime indicator
+regime_adx_period: 14     # Wilder's standard period
+regime_adx_min:    20.0   # ADX threshold (tune per symbol)
+
+# ── Per-symbol overrides ──────────────────────────────────────────────────────
+# Any key here overrides the global default for that symbol only.
+# spread_pts: live bid-ask spread in points (measured MT5 ICMarkets EU Demo 2026-05-26).
+#             Used as fallback when MT5 tick fetch fails (live loop reads spread directly).
+# active: false  →  loop skips this symbol entirely (suspended pairs kept for reference)
+symbols:
+  default:
+    spread_pts: 20
+
+  # ── ACTIVE pairs ─────────────────────────────────────────────────────────────
+
+  GBPAUD:                    # OOS +44.92R  Sharpe 1.52  CAGR +17.1%  -- best OOS performer
+    n_bias: 7
+    n_signal: 3
+    zone_lo: 0.236
+    zone_hi: 0.786
+    timeout_bars: 2
+    spread_pts: 18
+
+  BTCUSD:                    # OOS +31.94R  Sharpe 1.14  CAGR +15.1%  -- VAL -11.89R caution
+    n_bias: 9
+    n_signal: 3
+    zone_lo: 0.236
+    zone_hi: 0.618
+    timeout_bars: 2
+    spread_pts: 1200
+
+  GBPUSD:                    # OOS +25.33R  Sharpe 1.43  CAGR +12.6%  -- nb5 critical
+    n_bias: 5
+    n_signal: 3
+    zone_lo: 0.236
+    zone_hi: 0.618
+    timeout_bars: 6
+    spread_pts: 12
+
+  USDCHF:                    # OOS +22.43R  Sharpe 0.96  CAGR  +8.9%  -- stable IS+OOS
+    n_bias: 9
+    n_signal: 3
+    zone_lo: 0.236
+    zone_hi: 0.618
+    timeout_bars: 6
+    spread_pts: 9
+
+  XAUUSD:                    # OOS +19.32R  Sharpe 0.89  CAGR  +9.5%  -- default params win
+    n_bias: 9
+    n_signal: 3
+    zone_lo: 0.236
+    zone_hi: 0.618
+    timeout_bars: 6
+    spread_pts: 19
+
+  NZDUSD:                    # OOS +15.30R  Sharpe 1.08  CAGR  +8.4%  -- only 16 OOS trades
+    n_bias: 9
+    n_signal: 5
+    zone_lo: 0.382
+    zone_hi: 0.618
+    timeout_bars: 2
+    spread_pts: 11
+
+  # ── SUSPENDED pairs — spread eliminates edge, do not trade ───────────────────
+
+  USDJPY:                    # OOS  +1.24R  Sharpe 0.15  -- suspended
+    active: false
+    n_bias: 9
+    n_signal: 7
+    zone_lo: 0.236
+    zone_hi: 0.618
+    timeout_bars: 4
+    spread_pts: 10
+
+  EURUSD:                    # OOS  +0.58R  Sharpe 0.07  -- suspended
+    active: false
+    n_bias: 9
+    n_signal: 7
+    zone_lo: 0.236
+    zone_hi: 0.618
+    timeout_bars: 6
+    spread_pts: 9
+
+  GBPJPY:                    # OOS  +0.73R  Sharpe 0.05  MaxDD 9.61R  -- suspended
+    active: false
+    n_bias: 5
+    n_signal: 5
+    zone_lo: 0.236
+    zone_hi: 0.618
+    timeout_bars: 6
+    spread_pts: 22
+
+  EURJPY:                    # OOS  +0.12R  Sharpe 0.01  MaxDD 14.22R -- suspended
+    active: false
+    n_bias: 5
+    n_signal: 3
+    zone_lo: 0.236
+    zone_hi: 0.618
+    timeout_bars: 2
+    spread_pts: 21
+
+  # ── REMOVED pairs — negative OOS after spread ────────────────────────────────
+  # EURGBP:  OOS -9.99R  -- removed
+  # GBPCHF:  OOS -21.05R -- removed
+  # CHFJPY:  OOS -26.23R -- removed
