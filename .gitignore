@@ -18,6 +18,8 @@ data/
 
 # State runtime files (trades, heartbeat) — live on Railway persistent volume
 # BUT: strategy.yaml, goal.yaml, hypotheses.jsonl and history/ are committed
+state/trades.jsonl
+state/heartbeat.json
 state/*/trades.jsonl
 state/*/heartbeat.json
 state/*/hypotheses.jsonl
