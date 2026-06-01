@@ -514,6 +514,27 @@ class MTFTradingLoop:
                 logger.warning(f"Status server could not start: {exc}")
 
         while True:
+            # ── Weekend / market-closed guard ─────────────────────────────────
+            # Forex markets close Friday ~22:00 UTC, reopen Sunday ~22:00 UTC.
+            # During that window yfinance returns empty data, which would trip
+            # the circuit breaker every 25 min and spam Railway restarts.
+            # BTCUSD trades 24/7 so it is excluded from this check.
+            now_utc = datetime.now(timezone.utc)
+            wd      = now_utc.weekday()   # 0=Mon … 4=Fri  5=Sat  6=Sun
+            h       = now_utc.hour
+            forex_closed = (
+                wd == 5                    # all of Saturday
+                or (wd == 6 and h < 22)    # Sunday before 22:00 UTC
+                or (wd == 4 and h >= 22)   # Friday after  22:00 UTC
+            )
+            if forex_closed and self.asset != "BTCUSD":
+                logger.info(
+                    f"{self.asset}: forex weekend — sleeping 1 h "
+                    f"(reopens Sun 22:00 UTC)"
+                )
+                await asyncio.sleep(3600)
+                continue
+
             try:
                 success = await self.run_once()
                 self.consecutive_failures = (
