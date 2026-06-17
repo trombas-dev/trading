@@ -25,6 +25,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -198,7 +199,7 @@ class BreakoutTradingLoop:
         cfg        = self._load_cfg()
         pos_size_r = float(cfg.get("position_size_r", 0.01))
 
-        source = cfg.get("source", "mt5")
+        source = os.environ.get("DATA_SOURCE") or cfg.get("source", "yfinance")
         df = await _fetch_h1(self.asset, source)
         if df is None or len(df) < 50:
             logger.warning(f"[BO] {self.asset}: insufficient H1 bars")

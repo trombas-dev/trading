@@ -40,6 +40,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -372,7 +373,7 @@ class MTFTradingLoop:
             return True   # return True so the outer loop keeps running (not a fatal error)
 
         params   = self._strategy_to_params(strategy)
-        source   = strategy.get("source", "yfinance")
+        source   = os.environ.get("DATA_SOURCE") or strategy.get("source", "yfinance")
         pos_size = float(strategy.get("position_size_r", 0.01))
 
         # ── Bar counts by timeframe (strategy.yaml can tune per-TF) ──────────
