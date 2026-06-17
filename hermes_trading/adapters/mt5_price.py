@@ -196,13 +196,7 @@ async def fetch_half_spread(
     source="yfinance" : returns 0.0 (no live tick data available)
     """
     if source == "postgres":
-        try:
-            spread = await asyncio.wait_for(
-                asyncio.to_thread(_pg_spread_sync, symbol),
-                timeout=10,
-            )
-        except Exception:
-            spread = None
+        spread = await _pg_spread_async(symbol)
         if spread is not None:
             return spread / 2.0
         return 0.0
@@ -337,36 +331,44 @@ def _yf_bars_sync(symbol: str, tf: str, n_bars: int) -> pd.DataFrame:
 
 # ── PostgreSQL bridge (synchronous) ───────────────────────────────────────────
 
-def _pg_bars_sync(symbol: str, tf: str, n_bars: int) -> pd.DataFrame:
-    """Read bars from the Railway PostgreSQL bridge table (sync, called in thread)."""
-    import psycopg2
-    import psycopg2.extras
+async def _pg_bars_async(symbol: str, tf: str, n_bars: int) -> pd.DataFrame:
+    """Read bars from Railway PostgreSQL using asyncpg (truly async, no threads)."""
+    import asyncpg
+    from datetime import timezone as tz
 
     db_url = os.environ.get("DATABASE_URL", "")
     if not db_url:
         raise RuntimeError("DATABASE_URL not set — cannot use postgres source")
 
-    conn = psycopg2.connect(db_url, sslmode="require", connect_timeout=10)
+    # asyncpg needs postgresql:// not postgres://
+    db_url = db_url.replace("postgres://", "postgresql://", 1)
+
+    conn = await asyncio.wait_for(
+        asyncpg.connect(db_url, ssl="require", timeout=10),
+        timeout=12,
+    )
     try:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(
+        rows = await asyncio.wait_for(
+            conn.fetch(
                 """
                 SELECT ts, open, high, low, close, volume
                 FROM bars
-                WHERE symbol = %s AND timeframe = %s
+                WHERE symbol = $1 AND timeframe = $2
                 ORDER BY ts DESC
-                LIMIT %s
+                LIMIT $3
                 """,
-                (symbol, tf, n_bars),
-            )
-            rows = cur.fetchall()
+                symbol, tf, n_bars,
+            ),
+            timeout=10,
+        )
     finally:
-        conn.close()
+        await conn.close()
 
     if not rows:
         raise ValueError(f"No Postgres bars for {symbol} {tf}")
 
-    df = pd.DataFrame(rows)
+    data = [dict(r) for r in rows]
+    df = pd.DataFrame(data)
     df["ts"] = pd.to_datetime(df["ts"], utc=True)
     df.set_index("ts", inplace=True)
     df.index.name = "timestamp"
@@ -374,36 +376,42 @@ def _pg_bars_sync(symbol: str, tf: str, n_bars: int) -> pd.DataFrame:
     return _normalise(df)
 
 
-def _pg_spread_sync(symbol: str) -> float | None:
-    """Read the latest spread from the spreads table. Returns None if unavailable."""
+async def _pg_spread_async(symbol: str) -> float | None:
+    """Read latest spread from Railway PostgreSQL using asyncpg."""
     try:
-        import psycopg2
+        import asyncpg
+        from datetime import timezone as tz, timedelta
 
         db_url = os.environ.get("DATABASE_URL", "")
         if not db_url:
             return None
-        conn = psycopg2.connect(db_url, sslmode="require", connect_timeout=10)
+        db_url = db_url.replace("postgres://", "postgresql://", 1)
+
+        conn = await asyncio.wait_for(
+            asyncpg.connect(db_url, ssl="require", timeout=10),
+            timeout=12,
+        )
         try:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT spread, updated_at FROM spreads WHERE symbol = %s",
-                    (symbol,),
-                )
-                row = cur.fetchone()
+            row = await asyncio.wait_for(
+                conn.fetchrow(
+                    "SELECT spread, updated_at FROM spreads WHERE symbol = $1",
+                    symbol,
+                ),
+                timeout=10,
+            )
         finally:
-            conn.close()
+            await conn.close()
+
         if row is None:
-            logger.warning(f"pg_spread({symbol}): no row in spreads table")
             return None
-        spread, updated_at = row
-        from datetime import datetime, timezone, timedelta
+        spread = row["spread"]
+        updated_at = row["updated_at"]
         if updated_at.tzinfo is None:
-            updated_at = updated_at.replace(tzinfo=timezone.utc)
-        age = datetime.now(timezone.utc) - updated_at
+            updated_at = updated_at.replace(tzinfo=tz.utc)
+        from datetime import datetime
+        age = datetime.now(tz.utc) - updated_at
         if age > timedelta(hours=4):
-            logger.warning(f"pg_spread({symbol}): stale ({age}), ignoring")
             return None
-        logger.debug(f"pg_spread({symbol}): {spread:.5f} (age {age})")
         return float(spread)
     except Exception as exc:
         logger.warning(f"pg_spread({symbol}) failed: {exc}")
@@ -424,10 +432,7 @@ async def _fetch_bars(symbol: str, tf: str, n_bars: int, source: str) -> pd.Data
     """
     if source == "postgres":
         try:
-            return await asyncio.wait_for(
-                asyncio.to_thread(_pg_bars_sync, symbol, tf, n_bars),
-                timeout=15,
-            )
+            return await _pg_bars_async(symbol, tf, n_bars)
         except Exception as exc:
             logger.warning(
                 f"Postgres fetch failed for {symbol} {tf}: {exc}. "
