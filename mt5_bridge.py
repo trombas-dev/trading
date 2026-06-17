@@ -184,6 +184,19 @@ def push_spread(conn, symbol: str):
     conn.commit()
 
 
+def push_all_spreads(conn):
+    """Push live spreads for all symbols — runs every minute."""
+    for symbol in SYMBOLS:
+        try:
+            push_spread(conn, symbol)
+        except Exception as exc:
+            log.warning(f"spread {symbol}: {exc}")
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+
+
 # ── Main tick ─────────────────────────────────────────────────────────────────
 
 def tick(conn, full: bool = False):
@@ -245,7 +258,8 @@ def main():
     tick(conn, full=True)
     log.info("Full history push complete. Starting 5-minute interval ticks.")
 
-    # Incremental every 5 minutes
+    # Spreads every minute, bars every 5 minutes
+    schedule.every(1).minutes.do(push_all_spreads, conn=conn)
     schedule.every(5).minutes.do(tick, conn=conn, full=False)
 
     while True:

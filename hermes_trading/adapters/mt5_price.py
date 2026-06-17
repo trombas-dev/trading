@@ -388,15 +388,17 @@ def _pg_spread_sync(symbol: str) -> float | None:
         finally:
             conn.close()
         if row is None:
+            logger.warning(f"pg_spread({symbol}): no row in spreads table")
             return None
         spread, updated_at = row
-        # Ignore stale spreads (older than 30 minutes)
         from datetime import datetime, timezone, timedelta
         if updated_at.tzinfo is None:
             updated_at = updated_at.replace(tzinfo=timezone.utc)
         age = datetime.now(timezone.utc) - updated_at
-        if age > timedelta(minutes=30):
+        if age > timedelta(hours=4):
+            logger.warning(f"pg_spread({symbol}): stale ({age}), ignoring")
             return None
+        logger.debug(f"pg_spread({symbol}): {spread:.5f} (age {age})")
         return float(spread)
     except Exception as exc:
         logger.warning(f"pg_spread({symbol}) failed: {exc}")
