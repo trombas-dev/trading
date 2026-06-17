@@ -300,6 +300,8 @@ def _yf_bars_sync(symbol: str, tf: str, n_bars: int) -> pd.DataFrame:
     resample.  All other timeframes are fetched directly.
     """
     import yfinance as yf
+    import requests
+    import functools
 
     ticker = SYMBOL_MAP.get(symbol)
     if not ticker:
@@ -310,14 +312,17 @@ def _yf_bars_sync(symbol: str, tf: str, n_bars: int) -> pd.DataFrame:
     interval = _YF_INTERVAL[fetch_tf]
     period   = _YF_PERIOD[tf]
 
-    import socket
-    socket.setdefaulttimeout(30)   # hard 30s timeout on all network calls
+    # Pass a session with hard connect+read timeouts so downloads never hang
+    session = requests.Session()
+    session.request = functools.partial(session.request, timeout=(10, 30))
+
     raw = yf.download(
         ticker,
         period=period,
         interval=interval,
         progress=False,
         auto_adjust=True,
+        session=session,
     )
     if raw is None or raw.empty:
         raise ValueError(f"yfinance returned empty data for {ticker} / {interval}")
