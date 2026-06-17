@@ -41,6 +41,9 @@ logger = logging.getLogger(__name__)
 # MT5 is single-threaded internally; serialise all initialize/shutdown calls.
 _MT5_LOCK: asyncio.Lock | None = None
 
+# Limit concurrent yfinance downloads to avoid thread pool exhaustion
+_YF_SEM: asyncio.Semaphore | None = None
+
 
 def _get_mt5_lock() -> asyncio.Lock:
     """Return the per-event-loop MT5 lock, creating it lazily."""
@@ -307,6 +310,8 @@ def _yf_bars_sync(symbol: str, tf: str, n_bars: int) -> pd.DataFrame:
     interval = _YF_INTERVAL[fetch_tf]
     period   = _YF_PERIOD[tf]
 
+    import socket
+    socket.setdefaulttimeout(30)   # hard 30s timeout on all network calls
     raw = yf.download(
         ticker,
         period=period,
@@ -451,8 +456,15 @@ async def _fetch_bars(symbol: str, tf: str, n_bars: int, source: str) -> pd.Data
                 f"Falling back to yfinance."
             )
 
-    # yfinance path (explicit or fallback)
-    return await asyncio.to_thread(_yf_bars_sync, symbol, tf, n_bars)
+    # yfinance path (explicit or fallback) — max 4 concurrent downloads
+    global _YF_SEM
+    if _YF_SEM is None:
+        _YF_SEM = asyncio.Semaphore(4)
+    async with _YF_SEM:
+        return await asyncio.wait_for(
+            asyncio.to_thread(_yf_bars_sync, symbol, tf, n_bars),
+            timeout=45,
+        )
 
 
 async def fetch_mtf_bars(
