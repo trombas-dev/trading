@@ -21,7 +21,6 @@ import yaml
 from rich.logging import RichHandler
 
 from hermes_trading.loop_breakout import BreakoutTradingLoop
-import MetaTrader5 as mt5
 
 logging.basicConfig(
     level=logging.INFO,
@@ -32,16 +31,24 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def _init_mt5(cfg: dict) -> None:
-    ok = mt5.initialize(
-        server   = cfg.get("mt5_server",   "ICMarketsEU-Demo"),
-        login    = int(cfg.get("mt5_login",    52037890)),
-        password = cfg.get("mt5_password", "$8lyQHf3PnjvAx"),
-    )
-    if not ok:
-        raise RuntimeError(f"MT5 init failed: {mt5.last_error()}")
-    info = mt5.account_info()
-    logger.info(f"MT5 connected: {info.login}  balance {info.balance:.2f} {info.currency}")
+def _init_mt5(cfg: dict) -> bool:
+    """Try to initialise MT5 (Windows only). Returns True if connected."""
+    try:
+        import MetaTrader5 as mt5
+        ok = mt5.initialize(
+            server   = cfg.get("mt5_server",   "ICMarketsEU-Demo"),
+            login    = int(cfg.get("mt5_login",    52037890)),
+            password = cfg.get("mt5_password", "$8lyQHf3PnjvAx"),
+        )
+        if not ok:
+            logger.warning(f"MT5 init failed: {mt5.last_error()} — using yfinance fallback")
+            return False
+        info = mt5.account_info()
+        logger.info(f"MT5 connected: {info.login}  balance {info.balance:.2f} {info.currency}")
+        return True
+    except ImportError:
+        logger.info("MetaTrader5 not available (Linux/Railway) — using yfinance for all data")
+        return False
 
 
 def get_active_symbols(strategy_path: Path) -> list[str]:
@@ -109,8 +116,6 @@ def main() -> None:
     with open(strategy_path) as f:
         cfg = yaml.safe_load(f)
 
-    _init_mt5(cfg)
-
     if args.asset:
         symbols = [args.asset]
     else:
@@ -120,6 +125,7 @@ def main() -> None:
         logger.error("No active symbols found in breakout_strategy.yaml")
         sys.exit(1)
 
+    mt5_connected = _init_mt5(cfg)
     try:
         asyncio.run(run_portfolio(args.state_dir, strategy_path, symbols))
     except KeyboardInterrupt:
@@ -128,7 +134,12 @@ def main() -> None:
         logger.critical(str(e))
         sys.exit(1)
     finally:
-        mt5.shutdown()
+        if mt5_connected:
+            try:
+                import MetaTrader5 as mt5
+                mt5.shutdown()
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":
