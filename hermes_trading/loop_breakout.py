@@ -257,17 +257,22 @@ class BreakoutTradingLoop:
     # ── Event loop ────────────────────────────────────────────────────────────
 
     def _restore_state(self) -> None:
-        """Reload last_acted_entry_ts from heartbeat so restarts don't re-trade old signals."""
-        if not self.heartbeat_path.exists():
-            return
+        """Reload last_acted_entry_ts from heartbeat so restarts don't re-trade old signals.
+        If no saved timestamp exists, default to 2 hours ago so only fresh bars are traded."""
+        from datetime import timedelta
+        fallback = pd.Timestamp.utcnow().tz_localize("UTC") - pd.Timedelta(hours=2)
         try:
-            hb = json.loads(self.heartbeat_path.read_text())
-            ts_str = hb.get("last_acted_entry_ts")
-            if ts_str:
-                self.last_acted_entry_ts = pd.Timestamp(ts_str, tz="UTC")
-                logger.info(f"[BO] {self.asset}: restored last_acted_entry_ts={ts_str}")
+            if self.heartbeat_path.exists():
+                hb = json.loads(self.heartbeat_path.read_text())
+                ts_str = hb.get("last_acted_entry_ts")
+                if ts_str:
+                    self.last_acted_entry_ts = pd.Timestamp(ts_str, tz="UTC")
+                    logger.info(f"[BO] {self.asset}: restored last_acted_entry_ts={ts_str}")
+                    return
         except Exception:
             pass
+        self.last_acted_entry_ts = fallback
+        logger.info(f"[BO] {self.asset}: no saved state — ignoring signals before {fallback.isoformat()}")
 
     async def run(self) -> None:
         logger.info(
