@@ -243,22 +243,38 @@ class BreakoutTradingLoop:
         self.write_heartbeat(
             "ok",
             {
-                "price":        current_px,
-                "in_position":  self.position is not None,
-                "direction":    self.position["direction"] if self.position else None,
-                "bars_in_trade": self.bars_in_position,
-                "session":      self.position["session"] if self.position else None,
+                "price":               current_px,
+                "in_position":         self.position is not None,
+                "direction":           self.position["direction"] if self.position else None,
+                "bars_in_trade":       self.bars_in_position,
+                "session":             self.position["session"] if self.position else None,
+                "last_acted_entry_ts": self.last_acted_entry_ts.isoformat()
+                                       if self.last_acted_entry_ts is not None else None,
             },
         )
         return True
 
     # ── Event loop ────────────────────────────────────────────────────────────
 
+    def _restore_state(self) -> None:
+        """Reload last_acted_entry_ts from heartbeat so restarts don't re-trade old signals."""
+        if not self.heartbeat_path.exists():
+            return
+        try:
+            hb = json.loads(self.heartbeat_path.read_text())
+            ts_str = hb.get("last_acted_entry_ts")
+            if ts_str:
+                self.last_acted_entry_ts = pd.Timestamp(ts_str, tz="UTC")
+                logger.info(f"[BO] {self.asset}: restored last_acted_entry_ts={ts_str}")
+        except Exception:
+            pass
+
     async def run(self) -> None:
         logger.info(
             f"[BO] BreakoutLoop starting — asset={self.asset} "
             f"interval={LOOP_INTERVAL_S}s  mode=paper"
         )
+        self._restore_state()
         self.write_heartbeat("starting")
 
         while True:
