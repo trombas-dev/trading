@@ -116,7 +116,9 @@ def fetch_bars(symbol: str, tf_const, n_bars: int):
     """Fetch last n_bars from MT5 for symbol/timeframe."""
     mt5.symbol_select(symbol, True)
     rates = mt5.copy_rates_from_pos(symbol, tf_const, 0, n_bars)
-    if rates is None or len(rates) == 0:
+    if rates is None:
+        return []
+    if hasattr(rates, '__len__') and len(rates) == 0:
         return []
     return rates
 
@@ -135,7 +137,7 @@ def fetch_spread(symbol: str) -> float:
 def push_bars(conn, symbol: str, tf_const, tf_label: str, n_bars: int) -> int:
     """Fetch bars from MT5 and upsert into DB. Returns rows inserted."""
     rates = fetch_bars(symbol, tf_const, n_bars)
-    if not rates:
+    if rates is None or len(rates) == 0:
         return 0
 
     rows = [
