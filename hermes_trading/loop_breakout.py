@@ -209,7 +209,7 @@ class BreakoutTradingLoop:
         hl = build_session_hl(df)
         df = attach_sr(df, hl)
 
-        half_spread = await fetch_half_spread(self.asset, source="mt5", extra_pts=3)
+        half_spread = await fetch_half_spread(self.asset, source=source, extra_pts=3)
         ts          = datetime.now(timezone.utc).isoformat()
         last_bar    = df.iloc[-1]
         current_px  = float(last_bar["close"])

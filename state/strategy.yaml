@@ -52,7 +52,7 @@ max_bars_in_trade: 100   # entry-TF bars max before timeout exit
 position_size_r: 0.01    # 1 % of account per trade
 
 # ── Data source + bar counts ──────────────────────────────────────────────────
-source:     mt5          # yfinance | mt5
+source:     postgres     # postgres | mt5 | yfinance
 
 # Bar counts per timeframe (tune for scenario & memory constraints)
 n_bars_1d:  250          # 1D  bars (~1 year of trading days)

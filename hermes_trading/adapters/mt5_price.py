@@ -191,9 +191,17 @@ async def fetch_half_spread(
     """
     Async wrapper: fetch current half-spread + slippage buffer.
 
-    Only meaningful when source="mt5".  Returns 0.0 for yfinance
-    (no live tick data) or on any error, so callers always get a safe value.
+    source="postgres" : reads spread pushed by the Windows MT5 bridge
+    source="mt5"      : reads directly from MT5 terminal (Windows only)
+    source="yfinance" : returns 0.0 (no live tick data available)
     """
+    if source == "postgres":
+        spread = await asyncio.to_thread(_pg_spread_sync, symbol)
+        if spread is not None:
+            return spread / 2.0
+        # Fall through to 0.0 — bridge may not have run yet
+        return 0.0
+
     if source != "mt5":
         return 0.0
     try:
@@ -322,14 +330,99 @@ def _yf_bars_sync(symbol: str, tf: str, n_bars: int) -> pd.DataFrame:
     return df
 
 
+# ── PostgreSQL bridge (synchronous) ───────────────────────────────────────────
+
+def _pg_bars_sync(symbol: str, tf: str, n_bars: int) -> pd.DataFrame:
+    """Read bars from the Railway PostgreSQL bridge table (sync, called in thread)."""
+    import psycopg2
+    import psycopg2.extras
+
+    db_url = os.environ.get("DATABASE_URL", "")
+    if not db_url:
+        raise RuntimeError("DATABASE_URL not set — cannot use postgres source")
+
+    conn = psycopg2.connect(db_url, sslmode="require")
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT ts, open, high, low, close, volume
+                FROM bars
+                WHERE symbol = %s AND timeframe = %s
+                ORDER BY ts DESC
+                LIMIT %s
+                """,
+                (symbol, tf, n_bars),
+            )
+            rows = cur.fetchall()
+    finally:
+        conn.close()
+
+    if not rows:
+        raise ValueError(f"No Postgres bars for {symbol} {tf}")
+
+    df = pd.DataFrame(rows)
+    df["ts"] = pd.to_datetime(df["ts"], utc=True)
+    df.set_index("ts", inplace=True)
+    df.index.name = "timestamp"
+    df.sort_index(inplace=True)
+    return _normalise(df)
+
+
+def _pg_spread_sync(symbol: str) -> float | None:
+    """Read the latest spread from the spreads table. Returns None if unavailable."""
+    try:
+        import psycopg2
+
+        db_url = os.environ.get("DATABASE_URL", "")
+        if not db_url:
+            return None
+        conn = psycopg2.connect(db_url, sslmode="require")
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT spread, updated_at FROM spreads WHERE symbol = %s",
+                    (symbol,),
+                )
+                row = cur.fetchone()
+        finally:
+            conn.close()
+        if row is None:
+            return None
+        spread, updated_at = row
+        # Ignore stale spreads (older than 30 minutes)
+        from datetime import datetime, timezone, timedelta
+        age = datetime.now(timezone.utc) - updated_at.replace(tzinfo=timezone.utc)
+        if age > timedelta(minutes=30):
+            return None
+        return float(spread)
+    except Exception as exc:
+        logger.warning(f"pg_spread({symbol}) failed: {exc}")
+        return None
+
+
 # ── Async wrappers ────────────────────────────────────────────────────────────
 
 async def _fetch_bars(symbol: str, tf: str, n_bars: int, source: str) -> pd.DataFrame:
-    """Fetch bars for one timeframe; falls back to yfinance if MT5 fails.
+    """Fetch bars for one timeframe; falls back down the source chain.
 
-    MT5 calls are serialised through a per-loop asyncio.Lock so concurrent
-    gather() calls don't race on MT5's single-threaded initialize/shutdown.
+    Source priority:
+      "mt5"      -> MT5 terminal (Windows only, serialised via lock)
+      "postgres" -> Railway Postgres bridge table
+      "yfinance" -> yfinance (public data, always available)
+
+    When source="mt5" or "postgres", automatic fallback to yfinance on failure.
     """
+    if source == "postgres":
+        try:
+            return await asyncio.to_thread(_pg_bars_sync, symbol, tf, n_bars)
+        except Exception as exc:
+            logger.warning(
+                f"Postgres fetch failed for {symbol} {tf}: {exc}. "
+                f"Falling back to yfinance."
+            )
+        return await asyncio.to_thread(_yf_bars_sync, symbol, tf, n_bars)
+
     if source == "mt5":
         try:
             lock = _get_mt5_lock()

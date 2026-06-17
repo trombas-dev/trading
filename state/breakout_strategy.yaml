@@ -25,8 +25,10 @@ mt5_login:    52037890
 mt5_password: "$8lyQHf3PnjvAx"
 
 # ── Data source ────────────────────────────────────────────────────────────────
-# mt5: uses MT5 terminal (Windows only) with automatic yfinance fallback on Linux/Railway
-source: mt5
+# postgres : reads from Railway PostgreSQL (fed by mt5_bridge.py on Windows PC)
+# mt5      : reads directly from MT5 terminal (Windows only, falls back to yfinance)
+# yfinance : public data, no MT5 needed
+source: postgres
 
 # ── Risk ───────────────────────────────────────────────────────────────────────
 position_size_r: 0.01          # 1% of account per trade (R-multiple sizing)
