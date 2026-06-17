@@ -392,7 +392,9 @@ def _pg_spread_sync(symbol: str) -> float | None:
         spread, updated_at = row
         # Ignore stale spreads (older than 30 minutes)
         from datetime import datetime, timezone, timedelta
-        age = datetime.now(timezone.utc) - updated_at.replace(tzinfo=timezone.utc)
+        if updated_at.tzinfo is None:
+            updated_at = updated_at.replace(tzinfo=timezone.utc)
+        age = datetime.now(timezone.utc) - updated_at
         if age > timedelta(minutes=30):
             return None
         return float(spread)

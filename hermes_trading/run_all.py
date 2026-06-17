@@ -39,8 +39,9 @@ def _active_fib_symbols(strategy_path: Path) -> list[str]:
         with open(strategy_path) as f:
             cfg = yaml.safe_load(f)
         syms = cfg.get("symbols", {})
-        return [s for s, p in syms.items()
-                if s != "default" and isinstance(p, dict) and p.get("active", True)]
+        result = [s for s, p in syms.items()
+                  if s != "default" and isinstance(p, dict) and p.get("active", True)]
+        return result if result else _FIB_FALLBACK
     except Exception:
         return _FIB_FALLBACK
 
