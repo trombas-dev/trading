@@ -354,7 +354,7 @@ async def _pg_bars_async(symbol: str, tf: str, n_bars: int) -> pd.DataFrame:
     db_url = db_url.replace("postgres://", "postgresql://", 1)
 
     conn = await asyncio.wait_for(
-        asyncpg.connect(db_url, ssl="require", timeout=10),
+        asyncpg.connect(db_url, timeout=10),
         timeout=12,
     )
     try:
@@ -398,7 +398,7 @@ async def _pg_spread_async(symbol: str) -> float | None:
         db_url = db_url.replace("postgres://", "postgresql://", 1)
 
         conn = await asyncio.wait_for(
-            asyncpg.connect(db_url, ssl="require", timeout=10),
+            asyncpg.connect(db_url, timeout=10),
             timeout=12,
         )
         try:
