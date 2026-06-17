@@ -196,10 +196,15 @@ async def fetch_half_spread(
     source="yfinance" : returns 0.0 (no live tick data available)
     """
     if source == "postgres":
-        spread = await asyncio.to_thread(_pg_spread_sync, symbol)
+        try:
+            spread = await asyncio.wait_for(
+                asyncio.to_thread(_pg_spread_sync, symbol),
+                timeout=10,
+            )
+        except Exception:
+            spread = None
         if spread is not None:
             return spread / 2.0
-        # Fall through to 0.0 — bridge may not have run yet
         return 0.0
 
     if source != "mt5":
@@ -419,7 +424,10 @@ async def _fetch_bars(symbol: str, tf: str, n_bars: int, source: str) -> pd.Data
     """
     if source == "postgres":
         try:
-            return await asyncio.to_thread(_pg_bars_sync, symbol, tf, n_bars)
+            return await asyncio.wait_for(
+                asyncio.to_thread(_pg_bars_sync, symbol, tf, n_bars),
+                timeout=15,
+            )
         except Exception as exc:
             logger.warning(
                 f"Postgres fetch failed for {symbol} {tf}: {exc}. "
