@@ -200,8 +200,9 @@ class BreakoutTradingLoop:
         pos_size_r = float(cfg.get("position_size_r", 0.01))
 
         source = os.environ.get("DATA_SOURCE") or cfg.get("source", "yfinance")
-        logger.debug(f"[BO] {self.asset}: tick start source={source}")
+        logger.info(f"[BO] {self.asset}: tick start source={source}")
         df = await _fetch_h1(self.asset, source)
+        logger.info(f"[BO] {self.asset}: fetched {len(df) if df is not None else 0} bars")
         if df is None or len(df) < 50:
             logger.warning(f"[BO] {self.asset}: insufficient H1 bars")
             return False

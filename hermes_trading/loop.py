@@ -374,6 +374,7 @@ class MTFTradingLoop:
 
         params   = self._strategy_to_params(strategy)
         source   = os.environ.get("DATA_SOURCE") or strategy.get("source", "yfinance")
+        logger.info(f"[Fib] {self.asset}: tick start source={source}")
         pos_size = float(strategy.get("position_size_r", 0.01))
 
         # ── Bar counts by timeframe (strategy.yaml can tune per-TF) ──────────
