@@ -298,7 +298,14 @@ class BreakoutTradingLoop:
 
             try:
                 success = await self.run_once()
-                self.consecutive_failures = 0 if success else self.consecutive_failures + 1
+                if success:
+                    self.consecutive_failures = 0
+                else:
+                    self.consecutive_failures += 1
+                    logger.warning(
+                        f"[BO] {self.asset} run_once returned False "
+                        f"(failures={self.consecutive_failures}/{MAX_CONSECUTIVE_FAILURES})"
+                    )
             except Exception as exc:
                 logger.exception(f"[BO] {self.asset} unhandled error: {exc}")
                 self.consecutive_failures += 1

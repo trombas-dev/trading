@@ -341,7 +341,7 @@ def _pg_bars_sync(symbol: str, tf: str, n_bars: int) -> pd.DataFrame:
     if not db_url:
         raise RuntimeError("DATABASE_URL not set — cannot use postgres source")
 
-    conn = psycopg2.connect(db_url, sslmode="require")
+    conn = psycopg2.connect(db_url, sslmode="require", connect_timeout=10)
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(
@@ -377,7 +377,7 @@ def _pg_spread_sync(symbol: str) -> float | None:
         db_url = os.environ.get("DATABASE_URL", "")
         if not db_url:
             return None
-        conn = psycopg2.connect(db_url, sslmode="require")
+        conn = psycopg2.connect(db_url, sslmode="require", connect_timeout=10)
         try:
             with conn.cursor() as cur:
                 cur.execute(
