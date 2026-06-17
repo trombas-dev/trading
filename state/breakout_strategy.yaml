@@ -1,0 +1,93 @@
+# Hermes — Session Breakout Strategy configuration
+# Reloaded on every tick; no restart needed to change params.
+#
+# Strategy: H1 session-open breakout + retest
+#   Sessions : Asia (00-08), London (08-16), NY (13-21) UTC
+#   Entry    : breakout bar close + retest within 8 bars
+#   Exit     : session close (or stop loss)
+#   OOS ref  : exit_optimizer.py run 2022-2025, Session Close exit
+#
+# OOS Backtest Reference (2024-05-22 to 2025-05-30, bug-fixed engine):
+#   US30    : Sharpe 2.60   Ann +24.4%  WR 37%
+#   US500   : Sharpe 2.81   Ann +24.0%  WR 31%
+#   JP225   : Sharpe 1.92   Ann +18.5%  WR 36%
+#   XAUUSD  : Sharpe 3.03   Ann +19.3%  WR 34%
+#   XTIUSD  : Sharpe 2.38   Ann +22.5%  WR 32%
+#   XBRUSD  : Sharpe 1.92   Ann +14.9%  WR 30%
+#   XNGUSD  : Sharpe 4.60   Ann +34.5%  WR 34%
+#   BTCUSD  : Sharpe 2.80   Ann +30.0%  WR 41%
+
+version: 'bo-01'
+
+# ── MT5 connection ─────────────────────────────────────────────────────────────
+mt5_server:   "ICMarketsEU-Demo"
+mt5_login:    52037890
+mt5_password: "$8lyQHf3PnjvAx"
+
+# ── Data source ────────────────────────────────────────────────────────────────
+# mt5: uses MT5 terminal (Windows only) with automatic yfinance fallback on Linux/Railway
+source: mt5
+
+# ── Risk ───────────────────────────────────────────────────────────────────────
+position_size_r: 0.01          # 1% of account per trade (R-multiple sizing)
+
+# ── Entry parameters ───────────────────────────────────────────────────────────
+volume_mult:       1.5         # breakout bar must have volume > X * 20-bar avg
+atr_period:        14
+stop_atr_mult:     0.4         # stop = level ± 0.4 * ATR
+max_retest_bars:   8           # bars to wait for retest after breakout
+retest_tol_mult:   0.35        # retest within 0.35 * ATR of level
+max_trades_sess:   1           # max simultaneous entries per session per day
+
+# ── Per-symbol overrides ───────────────────────────────────────────────────────
+# active: false  -> skips the symbol (keeps it for reference)
+# spread_pts: fallback if MT5 tick fetch fails (in price units)
+
+symbols:
+  US30:                        # OOS Sharpe 2.60
+    spread_pts: 1.2
+    oos_r: 8.99                # OOS total PnL in R (vs 1% risk/trade sizing)
+    oos_sharpe: 2.60
+    oos_trades: 83
+
+  US500:                       # OOS Sharpe 2.81
+    spread_pts: 0.5
+    oos_r: 14.19
+    oos_sharpe: 2.81
+    oos_trades: 90
+
+  JP225:                       # OOS Sharpe 1.92
+    spread_pts: 4.0
+    oos_r: 4.98
+    oos_sharpe: 1.92
+    oos_trades: 71
+
+  XAUUSD:                      # OOS Sharpe 3.03
+    spread_pts: 0.21
+    oos_r: 12.67
+    oos_sharpe: 3.03
+    oos_trades: 108
+
+  XTIUSD:                      # OOS Sharpe 2.38
+    spread_pts: 0.02
+    oos_r: 10.02
+    oos_sharpe: 2.38
+    oos_trades: 105
+
+  XBRUSD:                      # OOS Sharpe 1.92
+    spread_pts: 0.01
+    oos_r: 6.24
+    oos_sharpe: 1.92
+    oos_trades: 87
+
+  XNGUSD:                      # OOS Sharpe 4.60  — best performer
+    spread_pts: 0.003
+    oos_r: 29.15
+    oos_sharpe: 4.60
+    oos_trades: 164
+
+  BTCUSD:                      # OOS Sharpe 2.80
+    spread_pts: 12.0
+    oos_r: 11.07
+    oos_sharpe: 2.80
+    oos_trades: 54

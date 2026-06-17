@@ -18,10 +18,22 @@ for f in "$DEFAULTS"/*.yaml "$DEFAULTS"/*.jsonl "$DEFAULTS"/*.json; do
     fi
 done
 
-# Create per-symbol state subdirectories for the 6 active pairs.
-# The loop writes heartbeat.json and trades.jsonl into these dirs.
+# Create per-symbol state subdirectories for the 6 active Fibonacci pairs.
 for sym in GBPAUD BTCUSD GBPUSD USDCHF XAUUSD NZDUSD; do
     mkdir -p "$STATE/$sym"
+done
+
+# Seed breakout_strategy.yaml if not already present
+if [ ! -f "$STATE/breakout_strategy.yaml" ]; then
+    if [ -f "$DEFAULTS/breakout_strategy.yaml" ]; then
+        cp "$DEFAULTS/breakout_strategy.yaml" "$STATE/breakout_strategy.yaml"
+        echo "[entrypoint] seeded breakout_strategy.yaml"
+    fi
+fi
+
+# Create per-symbol state dirs for the 8 breakout instruments.
+for sym in XNGUSD XAUUSD BTCUSD US500 US30 XTIUSD JP225 XBRUSD; do
+    mkdir -p "$STATE/breakout/$sym"
 done
 
 exec "$@"

@@ -92,19 +92,32 @@ _SCENARIO_TFS: dict[int, tuple[str, str, str]] = {
 # ── Symbol map ────────────────────────────────────────────────────────────────
 
 SYMBOL_MAP: dict[str, str] = {
+    # Forex
     "BTCUSD":  "BTC-USD",
     "EURUSD":  "EURUSD=X",
     "GBPUSD":  "GBPUSD=X",
     "USDJPY":  "USDJPY=X",
-    "XAUUSD":  "GC=F",
-    "GBPJPY":  "GBPJPY=X",
-    "EURJPY":  "EURJPY=X",
     "NZDUSD":  "NZDUSD=X",
     "EURGBP":  "EURGBP=X",
     "USDCHF":  "USDCHF=X",
     "GBPCHF":  "GBPCHF=X",
     "CHFJPY":  "CHFJPY=X",
     "GBPAUD":  "GBPAUD=X",
+    "GBPJPY":  "GBPJPY=X",
+    "EURJPY":  "EURJPY=X",
+    # Commodities
+    "XAUUSD":  "GC=F",
+    "XAGUSD":  "SI=F",
+    "XTIUSD":  "CL=F",
+    "XBRUSD":  "BZ=F",
+    "XNGUSD":  "NG=F",
+    # Indices
+    "US30":    "^DJI",
+    "US500":   "^GSPC",
+    "JP225":   "^N225",
+    "AUS200":  "^AXJO",
+    "UK100":   "^FTSE",
+    "GER40":   "^GDAXI",
 }
 
 _MT5_TF: dict[str, str] = {

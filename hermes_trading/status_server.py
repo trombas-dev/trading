@@ -27,7 +27,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-# ── Backtest OOS reference stats (grid optimizer, real MT5 spreads 2024-2026) ─
+# ── Fibonacci strategy OOS reference (grid optimizer, real MT5 spreads 2024-2026) ─
 _OOS_REF: dict[str, dict] = {
     "GBPAUD": {"oos_r": 44.92, "oos_sharpe": 1.52, "oos_trades": None,  "val_r":  -4.10, "note": ""},
     "BTCUSD": {"oos_r": 31.94, "oos_sharpe": 1.14, "oos_trades": 166,   "val_r": -11.89, "note": "VAL caution"},
@@ -38,6 +38,20 @@ _OOS_REF: dict[str, dict] = {
 }
 
 _ACTIVE_SYMBOLS = list(_OOS_REF.keys())
+
+# ── Breakout strategy OOS reference (exit_optimizer.py, Session Close exit, 2024-2025) ─
+_BO_OOS_REF: dict[str, dict] = {
+    "XNGUSD": {"oos_r": 29.15, "oos_sharpe": 4.60, "oos_trades": 164, "note": "best"},
+    "XAUUSD": {"oos_r": 12.67, "oos_sharpe": 3.03, "oos_trades": 108, "note": ""},
+    "BTCUSD": {"oos_r": 11.07, "oos_sharpe": 2.80, "oos_trades":  54, "note": ""},
+    "US500":  {"oos_r": 14.19, "oos_sharpe": 2.81, "oos_trades":  90, "note": ""},
+    "US30":   {"oos_r":  8.99, "oos_sharpe": 2.60, "oos_trades":  83, "note": ""},
+    "XTIUSD": {"oos_r": 10.02, "oos_sharpe": 2.38, "oos_trades": 105, "note": ""},
+    "JP225":  {"oos_r":  4.98, "oos_sharpe": 1.92, "oos_trades":  71, "note": ""},
+    "XBRUSD": {"oos_r":  6.24, "oos_sharpe": 1.92, "oos_trades":  87, "note": ""},
+}
+
+_BO_SYMBOLS = list(_BO_OOS_REF.keys())
 
 
 # ── Data helpers ───────────────────────────────────────────────────────────────
@@ -145,6 +159,25 @@ def _build_status(state_dir: Path) -> dict:
             all_trades.extend(s["trades"])
             all_hyps.extend(s["hypotheses"])
 
+        # ── Breakout strategy state ────────────────────────────────────────
+        bo_state_dir = state_dir / "breakout"
+        bo_per_symbol: dict[str, dict] = {}
+        bo_all_trades: list[dict] = []
+
+        if bo_state_dir.exists():
+            for sym in _BO_SYMBOLS:
+                sym_dir = bo_state_dir / sym
+                if sym_dir.exists():
+                    s = _symbol_status(sym_dir)
+                    bo_per_symbol[sym] = s
+                    bo_all_trades.extend(s["trades"])
+
+        bo_all_trades.sort(key=lambda t: t.get("ts_close", ""), reverse=True)
+        bo_portfolio_stats = _compute_stats(bo_all_trades)
+
+        # Combine for the global recent trades feed
+        all_trades.extend(bo_all_trades)
+
         # Sort all trades newest-first
         all_trades.sort(key=lambda t: t.get("ts_close", ""), reverse=True)
         all_hyps.sort(  key=lambda h: h.get("ts", ""),       reverse=True)
@@ -152,19 +185,21 @@ def _build_status(state_dir: Path) -> dict:
         portfolio_stats = _compute_stats(all_trades)
 
         return {
-            "generated_at":       datetime.now(timezone.utc).isoformat(),
-            "mode":               "portfolio",
-            "strategy":           strategy,
-            "goal":               goal,
-            "strategy_versions":  versions,
-            "portfolio_stats":    portfolio_stats,
-            "per_symbol":         per_symbol,
-            "last_20_trades":     all_trades[:20],
-            "last_5_hypotheses":  all_hyps[:5],
+            "generated_at":          datetime.now(timezone.utc).isoformat(),
+            "mode":                  "portfolio",
+            "strategy":              strategy,
+            "goal":                  goal,
+            "strategy_versions":     versions,
+            "portfolio_stats":       portfolio_stats,
+            "per_symbol":            per_symbol,
+            "bo_per_symbol":         bo_per_symbol,
+            "bo_portfolio_stats":    bo_portfolio_stats,
+            "last_20_trades":        all_trades[:20],
+            "last_5_hypotheses":     all_hyps[:5],
             # Legacy single-symbol fields (for backward-compat with /api/status consumers)
-            "stats":              portfolio_stats,
-            "heartbeat":          {},
-            "last_10_trades":     all_trades[:10],
+            "stats":                 portfolio_stats,
+            "heartbeat":             {},
+            "last_10_trades":        all_trades[:10],
         }
 
     else:
@@ -219,6 +254,55 @@ def _staleness_badge(hb: dict) -> str:
     return '<span class="badge badge-red">STALE</span>'
 
 
+def _bo_sym_rows(bo_per_symbol: dict) -> str:
+    """Build HTML table rows for the breakout strategy symbol table."""
+    rows = ""
+    for sym in _BO_SYMBOLS:
+        ref = _BO_OOS_REF[sym]
+        if sym in bo_per_symbol:
+            s_data = bo_per_symbol[sym]
+            hb     = s_data["heartbeat"]
+            s      = s_data["stats"]
+            badge  = _staleness_badge(hb)
+            last_t = hb.get("ts", "—")
+            last_t = last_t[:16].replace("T", " ") if last_t != "—" else "—"
+            in_pos = hb.get("in_position", False)
+            sess   = hb.get("session", "")
+            pos_badge = (f'<span class="badge badge-green">OPEN {sess}</span>' if in_pos
+                         else '<span class="badge" style="background:#1e293b;color:#475569">—</span>')
+            t_cnt  = s["total"]
+            wr     = f"{s['win_rate']:.0f}%" if t_cnt else "—"
+            lr_val = s["total_r"]
+            lr_str = f"{lr_val:+.2f}R" if t_cnt else "—"
+            lr_col = _pnl_color(lr_val) if t_cnt else "color:#475569"
+        else:
+            badge     = '<span class="badge badge-red">OFFLINE</span>'
+            last_t    = "—"
+            pos_badge = "—"
+            t_cnt     = 0
+            wr        = "—"
+            lr_str    = "—"
+            lr_col    = "color:#475569"
+
+        note_span = (f' <span style="color:#64748b;font-size:11px">({ref["note"]})</span>'
+                     if ref.get("note") else "")
+        rows += (
+            f"<tr>"
+            f"<td style='font-weight:600;color:#e2e8f0'>{sym}</td>"
+            f"<td>{badge}</td>"
+            f"<td style='color:#64748b;font-size:12px'>{last_t}</td>"
+            f"<td>{pos_badge}</td>"
+            f"<td style='text-align:right'>{t_cnt}</td>"
+            f"<td style='text-align:right'>{wr}</td>"
+            f"<td style='text-align:right;{lr_col}'>{lr_str}</td>"
+            f"<td style='text-align:right;color:#22c55e'>+{ref['oos_r']:.2f}R{note_span}</td>"
+            f"<td style='text-align:right;color:#94a3b8'>{ref['oos_sharpe']:.2f}</td>"
+            f"<td style='text-align:right;color:#475569'>{ref['oos_trades']}</td>"
+            f"</tr>"
+        )
+    return rows
+
+
 def _html_portfolio(status: dict) -> str:
     ps    = status["portfolio_stats"]
     goal  = status["goal"]
@@ -226,6 +310,10 @@ def _html_portfolio(status: dict) -> str:
     now   = status["generated_at"][:19].replace("T", " ")
     per_s = status["per_symbol"]
     oos_total_r = sum(v["oos_r"] for v in _OOS_REF.values())
+
+    bo_per_s        = status.get("bo_per_symbol", {})
+    bo_ps           = status.get("bo_portfolio_stats", {})
+    bo_oos_total_r  = sum(v["oos_r"] for v in _BO_OOS_REF.values())
 
     # ── per-symbol table rows ─────────────────────────────────────────────
     sym_rows = ""
@@ -322,12 +410,22 @@ def _html_portfolio(status: dict) -> str:
         hyp_rows = '<tr><td colspan=5 style="color:#475569">No reflections yet</td></tr>'
 
     # ── P&L cards ─────────────────────────────────────────────────────────
-    total_r   = ps["total_r"]
-    total_pct = ps["total_pnl_pct"]
-    wr        = ps["win_rate"]
-    total_t   = ps["total"]
+    fib_ps    = status.get("portfolio_stats", ps)   # Fibonacci only stats
+    total_r   = fib_ps.get("total_r", 0.0)
+    total_pct = fib_ps.get("total_pnl_pct", 0.0)
+    wr        = fib_ps.get("win_rate", 0.0)
+    total_t   = fib_ps.get("total", 0)
     wr_col    = "green" if wr >= 50 else "red"
     r_col     = "green" if total_r > 0 else ("red" if total_r < 0 else "muted")
+
+    bo_total_r   = bo_ps.get("total_r", 0.0)
+    bo_total_pct = bo_ps.get("total_pnl_pct", 0.0)
+    bo_wr        = bo_ps.get("win_rate", 0.0)
+    bo_total_t   = bo_ps.get("total", 0)
+    bo_wr_col    = "green" if bo_wr >= 50 else "red"
+    bo_r_col     = "green" if bo_total_r > 0 else ("red" if bo_total_r < 0 else "muted")
+
+    bo_sym_rows_html = _bo_sym_rows(bo_per_s)
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -339,6 +437,7 @@ def _html_portfolio(status: dict) -> str:
 <style>
   body{{background:#0f172a;color:#e2e8f0;font-family:system-ui,sans-serif;margin:0;padding:24px;max-width:1400px}}
   h1{{color:#f8fafc;font-size:20px;margin:0 0 4px}}
+  h2{{color:#94a3b8;font-size:14px;font-weight:600;margin:32px 0 4px;border-top:1px solid #1e293b;padding-top:20px}}
   .sub{{color:#64748b;font-size:13px;margin-bottom:24px}}
   .grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:24px}}
   .card{{background:#1e293b;border-radius:8px;padding:16px}}
@@ -355,72 +454,69 @@ def _html_portfolio(status: dict) -> str:
   .badge-green{{background:#14532d;color:#86efac}}
   .badge-red{{background:#450a0a;color:#fca5a5}}
   .badge-yellow{{background:#451a03;color:#fcd34d}}
+  .badge-blue{{background:#1e3a5f;color:#93c5fd}}
 </style>
 </head>
 <body>
 <h1>Hermes Portfolio</h1>
 <div class="sub">
-  MTF Fibonacci · Scenario 1 (1H→15M→5M) &nbsp;·&nbsp;
+  Two independent strategies running in parallel &nbsp;·&nbsp;
   Paper mode &nbsp;·&nbsp;
-  {len(_ACTIVE_SYMBOLS)} active pairs &nbsp;·&nbsp;
   Updated: {now} UTC
 </div>
 
+<!-- ── FIBONACCI STRATEGY ───────────────────────────────────────────── -->
+<h2>Strategy 1 &mdash; MTF Fibonacci (1H&rarr;15M&rarr;5M)</h2>
+<div class="sub">{len(_ACTIVE_SYMBOLS)} pairs active &nbsp;·&nbsp; OOS ref: +{oos_total_r:.0f}R</div>
 <div class="grid">
-  <div class="card">
-    <div class="label">Active Pairs</div>
-    <div class="value muted">{len(per_s)}/{len(_ACTIVE_SYMBOLS)}</div>
-  </div>
-  <div class="card">
-    <div class="label">Paper Trades</div>
-    <div class="value muted">{total_t}</div>
-  </div>
-  <div class="card">
-    <div class="label">Portfolio WR</div>
-    <div class="value {wr_col}">{wr:.0f}%</div>
-  </div>
-  <div class="card">
-    <div class="label">Live P&L (R)</div>
-    <div class="value {r_col}">{total_r:+.2f}R</div>
-  </div>
-  <div class="card">
-    <div class="label">Live P&L (%)</div>
-    <div class="value" style="{_pnl_color(total_pct)}">{total_pct:+.2f}%</div>
-  </div>
-  <div class="card">
-    <div class="label">OOS Ref (total)</div>
-    <div class="value green">+{oos_total_r:.0f}R</div>
-  </div>
-  <div class="card">
-    <div class="label">Strategy Versions</div>
-    <div class="value muted">{len(status['strategy_versions'])}</div>
-  </div>
-  <div class="card">
-    <div class="label">Target 30d</div>
-    <div class="value muted">{goal.get('target_return_30d',0.05)*100:.0f}%</div>
-  </div>
+  <div class="card"><div class="label">Active Pairs</div><div class="value muted">{len(per_s)}/{len(_ACTIVE_SYMBOLS)}</div></div>
+  <div class="card"><div class="label">Fib Trades</div><div class="value muted">{total_t}</div></div>
+  <div class="card"><div class="label">Fib WR</div><div class="value {wr_col}">{wr:.0f}%</div></div>
+  <div class="card"><div class="label">Fib Live R</div><div class="value {r_col}">{total_r:+.2f}R</div></div>
+  <div class="card"><div class="label">Fib Live %</div><div class="value" style="{_pnl_color(total_pct)}">{total_pct:+.2f}%</div></div>
+  <div class="card"><div class="label">OOS Ref</div><div class="value green">+{oos_total_r:.0f}R</div></div>
+  <div class="card"><div class="label">Strategy Versions</div><div class="value muted">{len(status['strategy_versions'])}</div></div>
+  <div class="card"><div class="label">Target 30d</div><div class="value muted">{goal.get('target_return_30d',0.05)*100:.0f}%</div></div>
 </div>
 
-<div class="section-title">Active Pairs — Live vs Backtest Reference</div>
+<div class="section-title">Fibonacci Pairs — Live vs Backtest Reference</div>
 <table>
   <thead>
     <tr>
-      <th>Symbol</th>
-      <th>Status</th>
-      <th>Last Tick (UTC)</th>
-      <th>Position</th>
-      <th class="r">Trades</th>
-      <th class="r">WR%</th>
-      <th class="r">Live R</th>
-      <th class="r">OOS R (ref)</th>
-      <th class="r">OOS Sharpe</th>
-      <th class="r">OOS Trades</th>
+      <th>Symbol</th><th>Status</th><th>Last Tick (UTC)</th><th>Position</th>
+      <th class="r">Trades</th><th class="r">WR%</th><th class="r">Live R</th>
+      <th class="r">OOS R (ref)</th><th class="r">OOS Sharpe</th><th class="r">OOS Trades</th>
     </tr>
   </thead>
   <tbody>{sym_rows}</tbody>
 </table>
 
-<div class="section-title">Recent Trades (all pairs, newest first)</div>
+<!-- ── BREAKOUT STRATEGY ──────────────────────────────────────────────── -->
+<h2>Strategy 2 &mdash; Session Breakout (H1, Asia/London/NY)</h2>
+<div class="sub">{len(_BO_SYMBOLS)} instruments active &nbsp;·&nbsp; OOS ref: +{bo_oos_total_r:.0f}R (2024-2025, Session Close exit)</div>
+<div class="grid">
+  <div class="card"><div class="label">Active Instruments</div><div class="value muted">{len(bo_per_s)}/{len(_BO_SYMBOLS)}</div></div>
+  <div class="card"><div class="label">Breakout Trades</div><div class="value muted">{bo_total_t}</div></div>
+  <div class="card"><div class="label">Breakout WR</div><div class="value {bo_wr_col}">{bo_wr:.0f}%</div></div>
+  <div class="card"><div class="label">Breakout Live R</div><div class="value {bo_r_col}">{bo_total_r:+.2f}R</div></div>
+  <div class="card"><div class="label">Breakout Live %</div><div class="value" style="{_pnl_color(bo_total_pct)}">{bo_total_pct:+.2f}%</div></div>
+  <div class="card"><div class="label">OOS Ref</div><div class="value green">+{bo_oos_total_r:.0f}R</div></div>
+</div>
+
+<div class="section-title">Breakout Instruments — Live vs Backtest Reference</div>
+<table>
+  <thead>
+    <tr>
+      <th>Symbol</th><th>Status</th><th>Last Tick (UTC)</th><th>Position</th>
+      <th class="r">Trades</th><th class="r">WR%</th><th class="r">Live R</th>
+      <th class="r">OOS R (ref)</th><th class="r">OOS Sharpe</th><th class="r">OOS Trades</th>
+    </tr>
+  </thead>
+  <tbody>{bo_sym_rows_html if bo_sym_rows_html else '<tr><td colspan=10 style="color:#475569;padding:16px">Session Breakout loop not started yet — run: python -m hermes_trading.run_breakout</td></tr>'}</tbody>
+</table>
+
+<!-- ── COMBINED TRADE FEED ────────────────────────────────────────────── -->
+<div class="section-title">Recent Trades — All Strategies (newest first)</div>
 <table>
   <thead>
     <tr>
@@ -432,7 +528,7 @@ def _html_portfolio(status: dict) -> str:
   <tbody>{trades_rows}</tbody>
 </table>
 
-<div class="section-title">Hermes Reflection Log</div>
+<div class="section-title">Hermes Reflection Log (Fibonacci strategy)</div>
 <table>
   <thead><tr><th>Time (UTC)</th><th>Version</th><th>Variable</th><th>Change</th><th>Rationale</th></tr></thead>
   <tbody>{hyp_rows}</tbody>
