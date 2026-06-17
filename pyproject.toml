@@ -20,6 +20,7 @@ dependencies = [
 [project.scripts]
 hermes-trading = "hermes_trading.run:main"
 hermes-breakout = "hermes_trading.run_breakout:main"
+hermes-all = "hermes_trading.run_all:main"
 hermes = "hermes_trading.hermes_cmd:main"
 hermes-stats = "hermes_trading.stats_cli:main"
 
