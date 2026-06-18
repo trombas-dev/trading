@@ -113,7 +113,11 @@ async def main_async(state_dir: Path) -> None:
     # Stagger BO loops by 30s so Fib's first Postgres queries complete first
     async def _run_bo_delayed(loop):
         await asyncio.sleep(30)
-        await loop.run()
+        try:
+            await loop.run()
+        except Exception as exc:
+            logger.error(f"[BO] {loop.asset} run() crashed: {exc}", exc_info=True)
+            raise
 
     all_loops = (
         [loop.run(start_status_server=False) for loop in fib_loops] +
