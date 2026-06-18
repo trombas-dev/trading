@@ -268,7 +268,12 @@ class BreakoutTradingLoop:
                 hb = json.loads(self.heartbeat_path.read_text())
                 ts_str = hb.get("last_acted_entry_ts")
                 if ts_str:
-                    self.last_acted_entry_ts = pd.Timestamp(ts_str, tz="UTC")
+                    ts = pd.Timestamp(ts_str)
+                    if ts.tzinfo is None:
+                        ts = ts.tz_localize("UTC")
+                    else:
+                        ts = ts.tz_convert("UTC")
+                    self.last_acted_entry_ts = ts
                     logger.info(f"[BO] {self.asset}: restored last_acted_entry_ts={ts_str}")
                     return
         except Exception:
@@ -281,20 +286,13 @@ class BreakoutTradingLoop:
             f"[BO] BreakoutLoop starting — asset={self.asset} "
             f"interval={LOOP_INTERVAL_S}s  mode=paper"
         )
-        logger.info(f"[BO] {self.asset}: calling _restore_state")
-        try:
-            self._restore_state()
-        except Exception as exc:
-            logger.warning(f"[BO] {self.asset}: _restore_state failed: {exc}")
-        logger.info(f"[BO] {self.asset}: calling write_heartbeat")
+        self._restore_state()
         self.write_heartbeat("starting")
-        logger.info(f"[BO] {self.asset}: entering main loop")
 
         while True:
             # BTCUSD trades 24/7; other instruments skip forex weekend
             now_utc = datetime.now(timezone.utc)
             wd, h   = now_utc.weekday(), now_utc.hour
-            logger.info(f"[BO] {self.asset}: loop top wd={wd} h={h}")
             market_closed = (
                 wd == 5
                 or (wd == 6 and h < 22)
