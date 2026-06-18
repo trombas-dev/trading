@@ -281,7 +281,12 @@ class BreakoutTradingLoop:
             f"[BO] BreakoutLoop starting — asset={self.asset} "
             f"interval={LOOP_INTERVAL_S}s  mode=paper"
         )
-        self._restore_state()
+        logger.info(f"[BO] {self.asset}: calling _restore_state")
+        try:
+            self._restore_state()
+        except Exception as exc:
+            logger.warning(f"[BO] {self.asset}: _restore_state failed: {exc}")
+        logger.info(f"[BO] {self.asset}: calling write_heartbeat")
         self.write_heartbeat("starting")
         logger.info(f"[BO] {self.asset}: entering main loop")
 
