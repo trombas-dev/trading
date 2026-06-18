@@ -110,9 +110,14 @@ async def main_async(state_dir: Path) -> None:
         logger.info(f"  [BO]  + {sym}")
 
     # ── Run everything concurrently ─────────────────────────────────────────
+    # Stagger BO loops by 30s so Fib's first Postgres queries complete first
+    async def _run_bo_delayed(loop):
+        await asyncio.sleep(30)
+        await loop.run()
+
     all_loops = (
         [loop.run(start_status_server=False) for loop in fib_loops] +
-        [loop.run() for loop in bo_loops]
+        [_run_bo_delayed(loop) for loop in bo_loops]
     )
     results = await asyncio.gather(*all_loops, return_exceptions=True)
 
