@@ -111,6 +111,7 @@ class BreakoutTradingLoop:
         }
         if extra:
             payload.update(extra)
+        self.heartbeat_path.parent.mkdir(parents=True, exist_ok=True)
         self.heartbeat_path.write_text(json.dumps(payload))
 
     def log_trade(self, trade: dict) -> None:
@@ -286,8 +287,14 @@ class BreakoutTradingLoop:
             f"[BO] BreakoutLoop starting — asset={self.asset} "
             f"interval={LOOP_INTERVAL_S}s  mode=paper"
         )
-        self._restore_state()
-        self.write_heartbeat("starting")
+        try:
+            self._restore_state()
+        except Exception as exc:
+            logger.warning(f"[BO] {self.asset}: _restore_state error: {exc}")
+        try:
+            self.write_heartbeat("starting")
+        except Exception as exc:
+            logger.warning(f"[BO] {self.asset}: write_heartbeat error: {exc}")
 
         while True:
             # BTCUSD trades 24/7; other instruments skip forex weekend
