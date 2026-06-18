@@ -283,11 +283,13 @@ class BreakoutTradingLoop:
         )
         self._restore_state()
         self.write_heartbeat("starting")
+        logger.info(f"[BO] {self.asset}: entering main loop")
 
         while True:
             # BTCUSD trades 24/7; other instruments skip forex weekend
             now_utc = datetime.now(timezone.utc)
             wd, h   = now_utc.weekday(), now_utc.hour
+            logger.info(f"[BO] {self.asset}: loop top wd={wd} h={h}")
             market_closed = (
                 wd == 5
                 or (wd == 6 and h < 22)

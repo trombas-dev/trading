@@ -461,10 +461,10 @@ async def _fetch_bars(symbol: str, tf: str, n_bars: int, source: str) -> pd.Data
                 f"Falling back to yfinance."
             )
 
-    # yfinance path (explicit or fallback) — max 4 concurrent downloads
+    # yfinance path (explicit or fallback) — max 6 concurrent downloads
     global _YF_SEM
     if _YF_SEM is None:
-        _YF_SEM = asyncio.Semaphore(4)
+        _YF_SEM = asyncio.Semaphore(6)
     async with _YF_SEM:
         return await asyncio.wait_for(
             asyncio.to_thread(_yf_bars_sync, symbol, tf, n_bars),
